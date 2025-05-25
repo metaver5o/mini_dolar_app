@@ -1,7 +1,7 @@
   ### Getting Started
 
 1. Build and run the container:
-     `` sh 
+     ``` sh 
     docker-compose up --build
     ```
 
@@ -11,7 +11,8 @@
 
 1. Navigate to the app directory:
     ```
-cld app
+    cd app
+    ```
 
  2. Install dependencies: 
     ```
