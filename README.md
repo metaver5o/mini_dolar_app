@@ -1,11 +1,3 @@
-<<!- filepath: /Users/marco/code/personal/mini-dolar/README.md -->
-<html>
-                       
-  <!-- Getting Started -->
-  <!-- Getting Started -->
-  <!-- Getting Started -->
-  <!-- Using Docker -->
-
   ### Getting Started
 
 1. Build and run the container:
