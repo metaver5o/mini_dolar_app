@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard Mini Índice 24/7</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
+    .dashboard { max-width: 1200px; margin: 0 auto; }
+    .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .price-display { font-size: 2.5em; font-weight: 800; margin: 10px 0; }
+    .positive { color: #27ae60; }
+    .negative { color: #e74c3c; }
+    .neutral { color: #7f8c8d; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .indicator { display: flex; justify-content: space-between; margin: 8px 0; }
+    .indicator-name { color: #7f8c8d; }
+    .indicator-value { font-weight: bold; }
+    .progress-bar { height: 6px; background: #ecf0f1; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+    .progress-fill { height: 100%; }
+    .rsi-fill { background: #3498db; width: 50%; }
+    .volatility-fill { background: #e67e22; width: 30%; }
+    h2 { color: #2c3e50; margin-top: 0; }
+    .time-display { color: #7f8c8d; text-align: right; font-size: 0.9em; }
+
+    .trade-signal-container {
+      margin-top: 20px;
+    }
+    
+    .trade-signal {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 10px 0;
+      text-align: center;
+      font-weight: bold;
+      font-size: 1.2em;
+      transition: all 0.3s ease;
+    }
+
+    .buy-signal {
+      background-color: rgba(46, 204, 113, 0.2);
+      border-left: 5px solid #2ecc71;
+      color: #27ae60;
+    }
+
+    .sell-signal {
+      background-color: rgba(231, 76, 60, 0.2);
+      border-left: 5px solid #e74c3c;
+      color: #c0392b;
+    }
+
+    .neutral-signal {
+      background-color: rgba(52, 152, 219, 0.2);
+      border-left: 5px solid #3498db;
+      color: #2980b9;
+    }
+
+    .signal-reasons {
+      margin-top: 10px;
+      font-size: 0.9em;
+      text-align: left;
+    }
+
+    .signal-reason {
+      margin: 5px 0;
+      padding-left: 10px;
+      border-left: 3px solid #7f8c8d;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <div class="header">
+      <h1>Mini Índice DOL - Monitoramento 24/7</h1>
+      <div class="time-display" id="current-time"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Cotação DOL</h2>
+        <div class="price-display" id="dol-price">-</div>
+        <div id="dol-change" class="neutral">-</div>
+        <div class="indicator">
+          <span>Sessão:</span>
+          <span id="session-range">-</span>
+        </div>
+        <div class="indicator">
+          <span>Volume:</span>
+          <span id="volume">-</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Indicadores Técnicos</h2>
+        <div class="indicator">
+          <span class="indicator-name">RSI (14):</span>
+          <span class="indicator-value" id="rsi">-</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill rsi-fill" id="rsi-bar"></div>
+        </div>
+
+        <div class="indicator">
+          <span class="indicator-name">Média Móvel (9):</span>
+          <span class="indicator-value" id="ma">-</span>
+        </div>
+
+        <div class="indicator">
+          <span class="indicator-name">Volatilidade:</span>
+          <span class="indicator-value" id="volatility">-</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill volatility-fill" id="volatility-bar"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Indicadores Econômicos</h2>
+        <div class="indicator">
+          <span class="indicator-name">SELIC:</span>
+          <span class="indicator-value" id="selic">-</span>
+        </div>
+        <div class="indicator">
+          <span class="indicator-name">IPCA:</span>
+          <span class="indicator-value" id="ipca">-</span>
+        </div>
+        <div class="indicator">
+          <span class="indicator-name">Índice Dólar (DXY):</span>
+          <span class="indicator-value" id="usd-index">-</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card trade-signal-container">
+      <h2>Sugestão de Operação</h2>
+      <div id="trade-signal" class="neutral-signal">
+        <div id="signal-text">Analisando mercado...</div>
+        <div id="signal-reasons" class="signal-reasons"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchData() {
+      const response = await fetch("/api/data");
+      return await response.json();
+    }
+
+    function updateTradeSignal(data) {
+      const signalElement = document.getElementById("trade-signal");
+      const signalText = document.getElementById("signal-text");
+      const reasonsElement = document.getElementById("signal-reasons");
+      
+      const reasons = [];
+      let buyScore = 0;
+      let sellScore = 0;
+
+      // 1. Análise de RSI
+      if (data.dol.indicators.rsi < 30) {
+        buyScore += 2;
+        reasons.push(`RSI indica SOBREVENDA (${data.dol.indicators.rsi.toFixed(1)})`);
+      } else if (data.dol.indicators.rsi > 70) {
+        sellScore += 2;
+        reasons.push(`RSI indica SOBRECOMPRA (${data.dol.indicators.rsi.toFixed(1)})`);
+      }
+
+      // 2. Tendência de preço
+      if (data.dol.change > 0) {
+        buyScore += 1;
+        reasons.push("Tendência de ALTA no curto prazo");
+      } else {
+        sellScore += 1;
+        reasons.push("Tendência de BAIXA no curto prazo");
+      }
+
+      // 3. Relação com média móvel
+      if (data.dol.price > data.dol.indicators.movingAverage) {
+        buyScore += 1;
+        reasons.push("Preço ACIMA da média móvel");
+      } else {
+        sellScore += 1;
+        reasons.push("Preço ABAIXO da média móvel");
+      }
+
+      // 4. Volatilidade
+      if (data.dol.indicators.volatility > 1.5) {
+        reasons.push("Alta volatilidade (${data.dol.indicators.volatility.toFixed(1)}%)");
+      }
+
+      // 5. Horário de mercado
+      const now = new Date();
+      const hours = now.getHours();
+      if (hours >= 9 && hours < 10) {
+        reasons.push("Pré-mercado (09:00-10:00 BRT) - Movimentos mais voláteis");
+      } else if (hours >= 10 && hours < 17) {
+        reasons.push("Mercado aberto - Liquidez normal");
+      } else {
+        reasons.push("Fora do horário de mercado - Movimentos podem ser amplificados");
+      }
+
+      // Determinar sugestão final
+      let suggestion = "";
+      if (buyScore > sellScore && buyScore >= 3) {
+        suggestion = "COMPRA";
+        signalElement.className = "trade-signal buy-signal";
+      } else if (sellScore > buyScore && sellScore >= 3) {
+        suggestion = "VENDA";
+        signalElement.className = "trade-signal sell-signal";
+      } else {
+        suggestion = "NEUTRO - Aguardar melhor oportunidade";
+        signalElement.className = "trade-signal neutral-signal";
+      }
+
+      signalText.textContent = suggestion;
+      reasonsElement.innerHTML = reasons.map(r => `<div class="signal-reason">${r}</div>`).join('');
+    }
+
+    function updateUI(data) {
+      // Atualizar tempo
+      document.getElementById("current-time").textContent = new Date().toLocaleTimeString('pt-BR');
+      
+      // Atualizar preço
+      const priceElement = document.getElementById("dol-price");
+      priceElement.textContent = data.dol.price.toFixed(2);
+      
+      // Atualizar variação
+      const changeElement = document.getElementById("dol-change");
+      const changePercent = (data.dol.change / data.dol.price * 100).toFixed(2);
+      changeElement.textContent = `${data.dol.change >= 0 ? '+' : ''}${data.dol.change.toFixed(2)} (${changePercent}%)`;
+      changeElement.className = data.dol.change > 0 ? "positive" : data.dol.change < 0 ? "negative" : "neutral";
+      
+      // Atualizar sessão
+      document.getElementById("session-range").textContent = 
+        `${data.dol.session.high.toFixed(2)} / ${data.dol.session.low.toFixed(2)}`;
+      
+      // Atualizar volume
+      document.getElementById("volume").textContent = data.dol.volume.toLocaleString('pt-BR');
+      
+      // Atualizar indicadores técnicos
+      document.getElementById("rsi").textContent = data.dol.indicators.rsi.toFixed(2);
+      document.getElementById("ma").textContent = data.dol.indicators.movingAverage.toFixed(2);
+      document.getElementById("volatility").textContent = `${data.dol.indicators.volatility.toFixed(2)}%`;
+      
+      // Atualizar barras de progresso
+      document.getElementById("rsi-bar").style.width = `${Math.min(100, data.dol.indicators.rsi)}%`;
+      document.getElementById("volatility-bar").style.width = `${Math.min(100, data.dol.indicators.volatility)}%`;
+      
+      // Atualizar indicadores econômicos
+      document.getElementById("selic").textContent = `${data.economicIndicators.selic}%`;
+      document.getElementById("ipca").textContent = `${data.economicIndicators.ipca}%`;
+      document.getElementById("usd-index").textContent = data.economicIndicators.usdIndex.toFixed(2);
+      
+      // Atualizar sinal de trade
+      updateTradeSignal(data);
+    }
+
+    // Atualizar a cada 30 segundos
+    setInterval(async () => {
+      updateUI(await fetchData());
+    }, 30000);
+    
+    // Atualizar imediatamente
+    fetchData().then(updateUI);
+  </script>
+</body>
+</html>
